@@ -85,4 +85,271 @@
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
       } catch (e) {
-        console.error("localStora
+        console.error("localStorage保存エラー", e);
+      }
+    }, [history]);
+    return [history, setHistory];
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  }
+
+  function App() {
+    const [checks, setChecks] = useState({});
+    const [memo, setMemo] = useState("");
+    const [wineName, setWineName] = useState("");
+    const [history, setHistory] = useLocalHistory();
+    const [query, setQuery] = useState("");
+
+    // toggle check state
+    function toggle(sectionKey, itemIndex) {
+      setChecks(prev => {
+        const sec = prev[sectionKey] ? { ...prev[sectionKey] } : {};
+        sec[itemIndex] = !sec[itemIndex];
+        return { ...prev, [sectionKey]: sec };
+      });
+    }
+
+    function saveEntry() {
+      const entry = {
+        id: Date.now(),
+        date: new Date().toISOString(),
+        wineName: wineName.trim(),
+        checks,
+        memo: memo.trim()
+      };
+      setHistory([entry, ...history]);
+      // reset
+      setChecks({});
+      setMemo("");
+      setWineName("");
+      // 小さな操作フィードバック（モバイル向け）
+      window.navigator.vibrate?.(50);
+    }
+
+    function deleteEntry(id) {
+      if (!confirm("この履歴を削除しますか？")) return;
+      setHistory(history.filter(h => h.id !== id));
+    }
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(history, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "wine_tasting_history.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importJSON(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!Array.isArray(data)) throw new Error("配列ではありません");
+          // 簡単にマージして上書き
+          setHistory([...data, ...history]);
+          alert("インポート完了（上書きではなく新しい履歴を追加しました）");
+        } catch (err) {
+          alert("JSONの読み込みに失敗しました: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    const filtered = history.filter(h => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return (h.wineName || "").toLowerCase().includes(q) || (h.memo || "").toLowerCase().includes(q);
+    });
+
+    return (
+      <div className="max-w-3xl mx-auto">
+        <header className="sticky top-0 bg-slate-50 pt-4 pb-2 -mx-4 px-4 border-b border-slate-200 z-20">
+          <h1 className="text-2xl font-bold">🍷 ワインテイスティングチェック</h1>
+          <p className="text-sm text-slate-600 mt-1">タップでチェック → 保存して履歴を残せます（ローカル保存）</p>
+        </header>
+
+        <main className="space-y-4 mt-4 pb-16">
+          <section className="bg-white rounded-lg shadow p-4">
+            <label className="block text-sm text-slate-700 mb-2">ワイン名（任意）</label>
+            <input
+              className="w-full border rounded px-3 py-2 mb-3 focus:outline-none focus:ring"
+              value={wineName}
+              onChange={e => setWineName(e.target.value)}
+              placeholder="例：ピノ・ノワール 2020"
+            />
+
+            {SECTIONS.map(sec => (
+              <div key={sec.key} className="mb-4">
+                <h2 className="font-semibold mb-2">{sec.title}</h2>
+                <div className="grid gap-2">
+                  {sec.items.map((it, idx) => {
+                    const checked = !!(checks[sec.key] && checks[sec.key][idx]);
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => toggle(sec.key, idx)}
+                        className={`text-left rounded p-2 border flex items-center justify-between gap-3
+                          ${checked ? "bg-rose-50 border-rose-200" : "bg-white border-slate-200"}
+                          focus:outline-none`}
+                        aria-pressed={checked}
+                      >
+                        <div>
+                          <div className="text-sm">{it}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">{checked ? "✓" : ""}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            <div className="mb-3">
+              <label className="block text-sm text-slate-700 mb-2">メモ</label>
+              <textarea
+                rows="3"
+                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring"
+                value={memo}
+                onChange={e => setMemo(e.target.value)}
+                placeholder="香り・味の印象や合わせたい料理などを自由に書いてください"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={saveEntry}
+                className="bg-rose-600 text-white px-4 py-2 rounded shadow-sm hover:bg-rose-700"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => { setChecks({}); setMemo(""); setWineName(""); }}
+                className="bg-white border px-4 py-2 rounded hover:bg-slate-50"
+              >
+                リセット
+              </button>
+
+              <button
+                onClick={exportJSON}
+                className="ml-auto bg-slate-800 text-white px-3 py-2 rounded hidden sm:inline-block"
+                title="履歴をJSONでダウンロード"
+              >
+                エクスポート
+              </button>
+
+              <label className="bg-white border px-3 py-2 rounded cursor-pointer">
+                インポート
+                <input
+                  type="file"
+                  accept="application/json"
+                  onChange={e => importJSON(e.target.files?.[0])}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">履歴</h2>
+            <input
+              className="border rounded px-2 py-1 w-48"
+              placeholder="検索（ワイン名・メモ）"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+          </section>
+
+          <section className="space-y-3">
+            {filtered.length === 0 ? (
+              <div className="text-sm text-slate-500 bg-white p-4 rounded border">履歴がありません。</div>
+            ) : (
+              filtered.map(entry => <HistoryCard key={entry.id} entry={entry} onDelete={() => deleteEntry(entry.id)} />)
+            )}
+          </section>
+        </main>
+
+        <footer className="text-center text-xs text-slate-500 pb-8">
+          ※データはお使いのブラウザのローカルストレージに保存されます。端末・ブラウザを変えると同期されません。
+        </footer>
+      </div>
+    );
+  }
+
+  function HistoryCard({ entry, onDelete }) {
+    const [open, setOpen] = useState(false);
+    return (
+      <article className="bg-white border rounded-lg shadow-sm p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <div>
+                <div className="text-sm text-slate-500">{formatDate(entry.date)}</div>
+                <div className="font-medium">{entry.wineName || <span className="text-slate-400">（ワイン名未記入）</span>}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOpen(o => !o)}
+                  className="text-sm px-2 py-1 border rounded"
+                >
+                  {open ? "閉じる" : "詳細"}
+                </button>
+                <button
+                  onClick={onDelete}
+                  className="text-sm px-2 py-1 border rounded text-red-600"
+                >
+                  削除
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-2 text-sm text-slate-700">{entry.memo || <span className="text-slate-400">（メモなし）</span>}</div>
+
+            {open && (
+              <div className="mt-3 border-t pt-3 text-sm text-slate-700 space-y-2">
+                {Object.keys(entry.checks || {}).length === 0 ? (
+                  <div className="text-slate-500">チェック項目はありません。</div>
+                ) : (
+                  Object.entries(entry.checks).map(([secKey, items]) => (
+                    <div key={secKey}>
+                      <div className="font-semibold mb-1 capitalize">{sectionTitleByKey(secKey)}</div>
+                      <ul className="grid gap-1">
+                        {Object.entries(items).map(([idx, v]) => (
+                          <li key={idx} className="flex items-center gap-2">
+                            <span className="w-4">{v ? "✓" : "—"}</span>
+                            <span className="text-slate-600">{itemLabelByKeyIndex(secKey, Number(idx))}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  function sectionTitleByKey(key) {
+    const f = SECTIONS.find(s => s.key === key);
+    return f ? f.title : key;
+  }
+  function itemLabelByKeyIndex(key, idx) {
+    const s = SECTIONS.find(s => s.key === key);
+    if (!s) return idx;
+    return s.items[idx] || `項目 ${idx+1}`;
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+const sections = [
+  {
+    title: "見る (Visual)",
+    items: [
+      "色は？",
+      "輝きや透明感はある？",
+      "涙（脚）は？"
+    ]
+  },
+  {
+    title: "香る (Nose)",
+    items: [
+      "第一印象を感じた？",
+      "スワリングして香りを開いた？",
+      "果実や花の香りを感じる？",
+      "その他の香りは？"
+    ]
+  },
+  {
+    title: "味わう (Palate)",
+    items: [
+      "酸味は？",
+      "甘みは？",
+      "渋みは？",
+      "アルコール感は？",
+      "余韻は？"
+    ]
+  },
+  {
+    title: "まとめ (Impression)",
+    items: [
+      "軽快？エレガント？力強い？",
+      "好きなタイプだった？",
+      "合わせたい料理は？"
+    ]
+  }
+];
+
+export default function WineTastingApp() {
+  const [checks, setChecks] = useState({});
+  const [memo, setMemo] = useState("");
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("wineHistory");
+    if (saved) setHistory(JSON.parse(saved));
+  }, []);
+
+  const toggleCheck = (section, item) => {
+    setChecks(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [item]: !prev[section]?.[item]
+      }
+    }));
+  };
+
+  const saveResult = () => {
+    const entry = {
+      date: new Date().toLocaleString(),
+      checks,
+      memo
+    };
+    const newHistory = [entry, ...history];
+    setHistory(newHistory);
+    localStorage.setItem("wineHistory", JSON.stringify(newHistory));
+    setChecks({});
+    setMemo("");
+  };
+
+  return (
+    <div className="p-4 max-w-3xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold">🍷 ワインテイスティングチェック</h1>
+
+      {sections.map(sec => (
+        <Card key={sec.title} className="shadow-md">
+          <CardContent className="p-4">
+            <h2 className="font-semibold mb-2">{sec.title}</h2>
+            <ul className="space-y-2">
+              {sec.items.map(item => (
+                <li key={item}>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checks[sec.title]?.[item] || false}
+                      onChange={() => toggleCheck(sec.title, item)}
+                    />
+                    {item}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ))}
+
+      <Card>
+        <CardContent className="p-4">
+          <h2 className="font-semibold mb-2">メモ</h2>
+          <textarea
+            className="w-full border rounded p-2"
+            rows="3"
+            value={memo}
+            onChange={e => setMemo(e.target.value)}
+          />
+        </CardContent>
+      </Card>
+
+      <Button onClick={saveResult}>保存</Button>
+
+      <h2 className="text-xl font-bold mt-6">履歴</h2>
+      <div className="space-y-4">
+        {history.map((h, i) => (
+          <Card key={i}>
+            <CardContent className="p-4">
+              <p className="text-sm text-gray-500">{h.date}</p>
+              <p className="mt-2">{h.memo}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
